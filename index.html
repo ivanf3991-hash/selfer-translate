@@ -426,9 +426,29 @@ function buildGlP(){if(!gl.length)return'';return'\n\nמילון מונחים ק
 async function trPage(src,pn,total,onPass,key){let cur=src;const sys='אתה מומחה לתרגום טקסטים עתיקים מרוסית ואנגלית לעברית מודרנית. דיוק מוחלט, יופי ספרותי, שמירה על עומק רוחני. אל תשמיט שום קטע. החזר רק את הטקסט המתורגם.'+buildGlP();for(let i=0;i<4;i++){onPass(i,'running');try{const msgs=i===0?[{role:'user',content:`טקסט (עמוד ${pn}/${total}):\n\n${src}\n\n${PP[i]}`}]:[{role:'user',content:`טקסט מקורי:\n\n${src}`},{role:'assistant',content:cur},{role:'user',content:PP[i]}];const hdrs={'Content-Type':'application/json'};if(key)hdrs['x-api-key']=key;const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:hdrs,body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,messages:msgs})});const data=await res.json();const txt=data.content?.map(c=>c.text||'').join('').trim();if(txt)cur=txt;onPass(i,'done');}catch{onPass(i,'error');}await sleep(300);}return cur;}
 
 // DOWNLOADS
-async function doPdf(){if(genPdf)return;const full=rows.filter(r=>r.status==='done').map(r=>r.text).join('\n\n');const btn=document.getElementById('dl-pdf');genPdf=true;btn.disabled=true;btn.textContent=t().gen;try{await bPdf(full,fName);}catch(e){console.error(e);}finally{genPdf=false;btn.disabled=false;btn.textContent=t().dlPdf;}}
+async function doPdf(){if(genPdf)return;const full=rows.filter(r=>r.status==='done').map(r=>r.text).join('\n\n');const btn=document.getElementById('dl-pdf');genPdf=true;btn.disabled=true;btn.textContent=t().gen;try{bPdf(full,fName);}catch(e){console.error(e);}finally{genPdf=false;btn.disabled=false;btn.textContent=t().dlPdf;}}
 function doTxt(){const full=rows.filter(r=>r.status==='done').map(r=>r.text).join('\n\n');const b=new Blob([`SEFER TRANSLATE\n${'═'.repeat(48)}\n\n${full}`],{type:'text/plain;charset=utf-8'});dl(URL.createObjectURL(b),`sefer_${Date.now()}.txt`);}
-async function bPdf(text,src){if(!window.jspdf)await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});const W=doc.internal.pageSize.getWidth(),H=doc.internal.pageSize.getHeight(),M=22;doc.setFillColor(7,7,15);doc.rect(0,0,W,H,'F');doc.setFontSize(9);doc.setTextColor(124,92,191);doc.text('SEFER TRANSLATE',W/2,30,{align:'center'});doc.setFontSize(20);doc.setTextColor(196,150,74);doc.text('סֵפֶר תַּרְגּוּם',W/2,50,{align:'center'});doc.setFontSize(11);doc.setTextColor(180,160,120);doc.text(src||'Ancient Text',W/2,65,{align:'center'});doc.setFontSize(8);doc.setTextColor(100,90,70);doc.text(new Date().toLocaleDateString()+' · 4-Pass Engine',W/2,78,{align:'center'});doc.text('דיוק · שירה · משמעות',W/2,86,{align:'center'});doc.addPage();doc.setFontSize(11);doc.setTextColor(30,20,10);let y=M;for(const line of text.split('\n')){if(!line.trim()){y+=5;continue;}const wrapped=doc.splitTextToSize(line,W-M*2);for(const wl of wrapped){if(y+8>H-M){doc.addPage();y=M;}doc.text(wl,W-M,y,{align:'right'});y+=7;}y+=2;}dl(URL.createObjectURL(doc.output('blob')),`sefer_${Date.now()}.pdf`);}
+function bPdf(text,src){
+  const paras=text.split('\n').map(l=>l.trim()?`<p>${l}</p>`:'<br/>').join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"/>
+  <link href="https://fonts.googleapis.com/css2?family=David+Libre:wght@400;700&display=swap" rel="stylesheet"/>
+  <style>
+    body{font-family:'David Libre',serif;direction:rtl;text-align:right;padding:60px 80px;background:#fff;color:#111;font-size:14pt;line-height:2}
+    h1{text-align:center;color:#c4964a;font-size:22pt;margin-bottom:8px}
+    .sub{text-align:center;color:#7c5cbf;font-size:11pt;margin-bottom:4px}
+    .meta{text-align:center;color:#999;font-size:9pt;margin-bottom:40px}
+    p{margin-bottom:10px}
+    @media print{body{padding:40px 60px}}
+  </style></head><body>
+  <h1>סֵפֶר תַּרְגּוּם</h1>
+  <div class="sub">SEFER TRANSLATE · 4-Pass Engine</div>
+  <div class="meta">${src||''} · ${new Date().toLocaleDateString('he-IL')}</div>
+  ${paras}
+  </body></html>`;
+  const b=new Blob([html],{type:'text/html;charset=utf-8'});
+  dl(URL.createObjectURL(b),`sefer_${Date.now()}.html`);
+  setTimeout(()=>alert('הקובץ נפתח בדפדפן — לחץ Ctrl+P (או Cmd+P) להדפסה/שמירה כ-PDF עם עברית מלאה ✓'),500);
+}
 function dl(href,name){Object.assign(document.createElement('a'),{href,download:name}).click();}
 function resetAll(){bodyTxt='';fName='';pages=[];rows=[];cPg=null;cPs=null;cancelled=false;genPdf=false;document.getElementById('ta').value='';document.getElementById('eerr').style.display='none';setD('idle');document.getElementById('di').textContent='📄';document.getElementById('di').style.animation='';$('dt',t().dragT);$('dds',t().dragS);setMode('file');setPhase('idle');onTa();}
 
@@ -438,7 +458,7 @@ function saveHist(full,done,total){hist.unshift({id:Date.now(),fName:fName||'Tex
 function clearHist(){if(!confirm('Clear all?'))return;hist=[];try{localStorage.removeItem(KH);}catch{}renderHist();}
 function renderHist(){const s=t();const wrap=document.getElementById('hcont');const clr=document.getElementById('hclr-w');if(!hist.length){clr.style.display='none';wrap.innerHTML=`<div class="he"><div style="font-size:40px;margin-bottom:10px">📚</div><p style="font-family:'Cinzel',serif;font-size:.85rem;margin-bottom:5px">${s.histE}</p><p style="font-size:.78rem">${s.histES}</p></div>`;return;}clr.style.display='flex';wrap.innerHTML=`<div class="hg">${hist.map(e=>`<div class="hc"><div class="hch"><span class="hct">📜 ${e.fName}</span><span class="hcd">${e.date}</span></div><div class="hcm">${s.hPl}: <span>${e.pages}/${e.total}</span>&nbsp;${s.hPs}: <span>${e.passes}</span></div><div class="hcb">${e.preview}${e.fullText.length>260?'...':''}</div><div class="hcf"><button class="btn bo bs" onclick="event.stopPropagation();hTxt(${e.id})">TXT</button><button class="btn bo bs" onclick="event.stopPropagation();hPdf(${e.id})">PDF</button></div></div>`).join('')}</div>`;}
 function hTxt(id){const e=hist.find(h=>h.id===id);if(!e)return;const b=new Blob([e.fullText],{type:'text/plain;charset=utf-8'});dl(URL.createObjectURL(b),`sefer_${id}.txt`);}
-async function hPdf(id){const e=hist.find(h=>h.id===id);if(e)await bPdf(e.fullText,e.fName);}
+async function hPdf(id){const e=hist.find(h=>h.id===id);if(e)bPdf(e.fullText,e.fName);}
 
 // GLOSSARY
 function loadGl(){try{const s=localStorage.getItem(KG);gl=s?JSON.parse(s):JSON.parse(JSON.stringify(DEF_GL));if(!s)localStorage.setItem(KG,JSON.stringify(gl));}catch{gl=JSON.parse(JSON.stringify(DEF_GL));}}
